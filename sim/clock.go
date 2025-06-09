@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"fmt"
 	"math"
 )
 
@@ -13,16 +14,22 @@ type Clock struct {
 
 type Timers struct {
 	Gcd                float64
-	MultishotCooldown  float64
-	MultishotCastTime  float64
-	SteadyshotCastTime float64
 	ReloadingTime      float64
 	AimingTime         float64
+	MultishotCastTime  float64
+	SteadyshotCastTime float64
+	MultishotCooldown  float64
+	RapidFireCooldown  float64
+
+	// tracks how much the next autoshot was clipped by (not overall total clipping time)
+	NextShotClippingTime float64
 }
 
 func (c *Clock) Tick(a *ActionQueue, h *Hunter, r *SimResult) {
 	c.Time += c.TickSize
 	c.decrementTimers(a, h, r)
+	c.decrementBuffs(h, r)
+	c.decrementDoTs(h, r)
 	a.Process(c, h, r)
 }
 
@@ -38,6 +45,7 @@ func (c *Clock) decrementTimers(a *ActionQueue, h *Hunter, r *SimResult) {
 	c.Timers.SteadyshotCastTime = math.Max(c.Timers.SteadyshotCastTime-c.TickSize, 0)
 	c.Timers.AimingTime = math.Max(c.Timers.AimingTime-c.TickSize, 0)
 	c.Timers.ReloadingTime = math.Max(c.Timers.ReloadingTime-c.TickSize, 0)
+	c.Timers.RapidFireCooldown = math.Max(c.Timers.RapidFireCooldown-c.TickSize, 0)
 
 	if wasMultishotCastActive && c.Timers.MultishotCastTime <= 0 {
 		a.FireMultishot(c, h, r)
@@ -48,6 +56,44 @@ func (c *Clock) decrementTimers(a *ActionQueue, h *Hunter, r *SimResult) {
 	if wasAimingActive && c.Timers.AimingTime <= 0 {
 		a.FireAutoshot(c, h, r)
 	}
+}
+
+func (c *Clock) decrementBuffs(h *Hunter, r *SimResult) {
+	wasQuickshotsHasteActive := h.BonusStats.QuickshotsHaste.RemainingTime > 0
+	wasRapidFireHasteActive := h.BonusStats.RapidFireHaste.RemainingTime > 0
+
+	if h.BonusStats.QuickshotsHaste.RemainingTime > 0 {
+		r.QuickshotsUptime += c.TickSize
+	}
+	if h.BonusStats.RapidFireHaste.RemainingTime > 0 {
+		r.RapidFireUptime += c.TickSize
+	}
+
+	h.BonusStats.QuickshotsHaste.RemainingTime = math.Max(h.BonusStats.QuickshotsHaste.RemainingTime-c.TickSize, 0)
+	h.BonusStats.RapidFireHaste.RemainingTime = math.Max(h.BonusStats.RapidFireHaste.RemainingTime-c.TickSize, 0)
+
+	if DEBUG {
+		if wasQuickshotsHasteActive && h.BonusStats.QuickshotsHaste.RemainingTime <= 0 {
+			h.BonusStats.QuickshotsHaste.RemainingTime = 0
+			fmt.Printf("%f - Quickshots expired\n", c.Time)
+		}
+		if wasRapidFireHasteActive && h.BonusStats.RapidFireHaste.RemainingTime <= 0 {
+			h.BonusStats.RapidFireHaste.RemainingTime = 0
+			fmt.Printf("%f - Rapid fire expired\n", c.Time)
+		}
+	}
+}
+
+func (c *Clock) decrementDoTs(h *Hunter, r *SimResult) {
+	if h.PiercingShotsDoT.DurationLeft > 0 && h.PiercingShotsDoT.DurationLeft < PIERCING_SHOTS_DURATION {
+		if isDivisible(h.PiercingShotsDoT.DurationLeft, h.PiercingShotsDoT.TicksEvery) {
+			r.PiercingShotsDamage += h.PiercingShotsDoT.DamagePerTick
+			if DEBUG {
+				fmt.Printf("%f - Piercing shots DoT tick for %f damage\n", c.Time, h.PiercingShotsDoT.DamagePerTick)
+			}
+		}
+	}
+	h.PiercingShotsDoT.DurationLeft = math.Max(h.PiercingShotsDoT.DurationLeft-c.TickSize, 0)
 }
 
 func (c *Clock) IsDone() bool {
@@ -66,4 +112,12 @@ func (c *Clock) IsFresh() bool {
 func (c *Clock) IsCasting() bool {
 	return c.Timers.MultishotCastTime > 0 ||
 		c.Timers.SteadyshotCastTime > 0
+}
+
+func isDivisible(a float64, b float64) bool {
+	// check if its whole number first
+	if a-float64(int64(a)) > 0.000001 {
+		return false
+	}
+	return int64(a)%int64(b) == 0
 }
