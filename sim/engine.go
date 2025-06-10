@@ -213,29 +213,29 @@ func EstimateStatEquivalence(params *InputParameters) (*StatEquivalenceResult, e
 	if params.NumberOfSims > 100000 {
 		return nil, fmt.Errorf("invalid number of simulations: %d (maximum allowed: 100000)", params.NumberOfSims)
 	}
-	// we check +10% crit instead of +1% crit, it was yielding more accurate results with less simulations
+	// we check +10% crit instead of +1% crit, it was yielding much more accurate results with less simulations
 	paramsPlusOneCrit := *params
 	paramsPlusOneCrit.Crit = params.Crit + 10.0
 	critPlusOneResults := runParallelSims(&paramsPlusOneCrit)
 
 	critPlusOneDPS := critPlusOneResults.DPS
 
-	apEquivalenceMin := 200.0
+	apEquivalenceMin := 100.0
 	apEquivalenceMax := 600.0
 	cursor := (apEquivalenceMax + apEquivalenceMin) / 2.0
+	var diff float64
 
-	diff := math.Inf(1)
-
-	// run a max of 20 binary searches, in case something goes wrong to avoid an infinite loop
+	// run a max of 20 fake "binary searches", in case something goes wrong to avoid an infinite loop
 	for i := 0; i < 20; i++ {
-		fmt.Printf("Iteration: %d, Cursor: %f, diff: %f\n", i+1, cursor, diff)
 		paramsPlusAp := *params
 		paramsPlusAp.AP = params.AP + int(cursor)
 		apPlusResults := runParallelSims(&paramsPlusAp)
 		apPlusDPS := apPlusResults.DPS
-		fmt.Printf("bonus: %f, apPlusDPS: %f, critPlusOneDPS: %f\n", cursor/10.0, apPlusDPS, critPlusOneDPS)
 		diff = math.Abs(apPlusDPS - critPlusOneDPS)
-		if diff < 0.5 {
+
+		fmt.Printf("Iteration: %d, Cursor: %f, diff: %f\n", i+1, cursor, diff)
+		fmt.Printf("bonus: %f, apPlusDPS: %f, critPlusOneDPS: %f\n", cursor/10.0, apPlusDPS, critPlusOneDPS)
+		if diff < 0.75 {
 			break
 		}
 		if apPlusDPS > critPlusOneDPS {
