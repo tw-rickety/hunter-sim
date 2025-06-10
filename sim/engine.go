@@ -48,6 +48,7 @@ type SimResult struct {
 type DebugResult struct {
 	MinDamageAutoshot   float64
 	MaxDamageAutoshot   float64
+	AutoshotSpeed       float64
 	MinDamageMultishot  float64
 	MaxDamageMultishot  float64
 	MinDamageSteadyshot float64
@@ -194,8 +195,7 @@ func runParallelSims(params *InputParameters) SimResult {
 		fmt.Sprintf("Average Endless Quiver Damage: %f (%.2f%%)", avgResult.EndlessQuiverDamage, avgResult.EndlessQuiverDamage/avgResult.TotalDamage*100),
 		fmt.Sprintf("Average Piercing Shots Damage: %f (%.2f%%)", avgResult.PiercingShotsDamage, avgResult.PiercingShotsDamage/avgResult.TotalDamage*100),
 		fmt.Sprintf("Average DPS: %f (±%.2f) [%.2f - %.2f]", avgResult.DPS, stdDev, minDPS, maxDPS),
-		fmt.Sprintf("Average Total Clipping Time: %fs", avgResult.TotalClippingTime),
-		fmt.Sprintf("Average Total Clipping Percentage: (%.2f%%)", avgResult.TotalClippingTime/params.FightDurationInSeconds*100),
+		fmt.Sprintf("Average Total Clipping Time: %fs (%.2f%%)", avgResult.TotalClippingTime, avgResult.TotalClippingTime/params.FightDurationInSeconds*100),
 		fmt.Sprintf("Average Rapid Fire Uptime: %fs (%.2f%%)", avgResult.RapidFireUptime, avgResult.RapidFireUptime/params.FightDurationInSeconds*100),
 		fmt.Sprintf("Average Quickshots Uptime: %fs (%.2f%%)", avgResult.QuickshotsUptime, avgResult.QuickshotsUptime/params.FightDurationInSeconds*100),
 		fmt.Sprintf("Number of Simulations: %d", count),
@@ -215,13 +215,13 @@ func EstimateStatEquivalence(params *InputParameters) (*StatEquivalenceResult, e
 	}
 	// we check +10% crit instead of +1% crit, it was yielding much more accurate results with less simulations
 	paramsPlusOneCrit := *params
-	paramsPlusOneCrit.Crit = params.Crit + 10.0
+	paramsPlusOneCrit.Crit = params.Crit + 1.0
 	critPlusOneResults := runParallelSims(&paramsPlusOneCrit)
 
 	critPlusOneDPS := critPlusOneResults.DPS
 
-	apEquivalenceMin := 100.0
-	apEquivalenceMax := 600.0
+	apEquivalenceMin := 10.0
+	apEquivalenceMax := 60.0
 	cursor := (apEquivalenceMax + apEquivalenceMin) / 2.0
 	var diff float64
 
@@ -234,8 +234,8 @@ func EstimateStatEquivalence(params *InputParameters) (*StatEquivalenceResult, e
 		diff = math.Abs(apPlusDPS - critPlusOneDPS)
 
 		fmt.Printf("Iteration: %d, Cursor: %f, diff: %f\n", i+1, cursor, diff)
-		fmt.Printf("bonus: %f, apPlusDPS: %f, critPlusOneDPS: %f\n", cursor/10.0, apPlusDPS, critPlusOneDPS)
-		if diff < 0.75 {
+		fmt.Printf("bonus: %f, apPlusDPS: %f, critPlusOneDPS: %f\n", cursor, apPlusDPS, critPlusOneDPS)
+		if diff < 0.1 {
 			break
 		}
 		if apPlusDPS > critPlusOneDPS {
@@ -246,30 +246,26 @@ func EstimateStatEquivalence(params *InputParameters) (*StatEquivalenceResult, e
 		cursor = (apEquivalenceMax + apEquivalenceMin) / 2.0
 	}
 
-	// divide by 10 to get 1% crit (instead of 10% crit)
-	cursor /= 10.0
-
 	apPerAgility := 2.2
 	critPerAgility := 1.0 / 53.0
 	agilityApEquivalence := apPerAgility + (critPerAgility * cursor)
 
 	result := &StatEquivalenceResult{
-		CritApEquivalence:    fmt.Sprintf("at this gear level, 1%% crit is approximately equal to %f AP", cursor),
-		AgilityApEquivalence: fmt.Sprintf("at this gear level, 1 agility is approximately equal to %f AP (with Blessing of Kings)", agilityApEquivalence),
+		CritApEquivalence:    fmt.Sprintf("at this gear level, +1%% crit is approximately equal to +%f AP", cursor),
+		AgilityApEquivalence: fmt.Sprintf("at this gear level, +1 agility is approximately equal to +%f AP (with Blessing of Kings)", agilityApEquivalence),
 	}
 	return result, nil
 }
 
 func DebugValues(params *InputParameters) DebugResult {
-	hunter, clock, actionQueue := SetupSim(params)
-	simResult := &SimResult{}
-	clock.Tick(actionQueue, hunter, simResult)
+	hunter, _, _ := SetupSim(params)
 	_, minDamageAuto, maxDamageAuto := hunter.GetAutoshotDamage(false)
 	_, minDamageMultishot, maxDamageMultishot := hunter.GetMultishotDamage(false)
 	_, minDamageSteadyshot, maxDamageSteadyshot := hunter.GetSteadyshotDamage(false)
 	return DebugResult{
 		MinDamageAutoshot:   float64(minDamageAuto),
 		MaxDamageAutoshot:   float64(maxDamageAuto),
+		AutoshotSpeed:       hunter.GetReloadingTime() + AIMING_TIME,
 		MinDamageMultishot:  float64(minDamageMultishot),
 		MaxDamageMultishot:  float64(maxDamageMultishot),
 		MinDamageSteadyshot: float64(minDamageSteadyshot),
