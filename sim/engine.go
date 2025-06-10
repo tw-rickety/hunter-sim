@@ -59,8 +59,6 @@ func RunBasicSim(params *InputParameters) (*SimResult, error) {
 		return nil, fmt.Errorf("invalid number of simulations: %d (maximum allowed: 100000)", params.NumberOfSims)
 	}
 	result := runParallelSims(params)
-	// equivalence := estimateStatEquivalence(params)
-	// fmt.Printf("Equivalence: %f\n", equivalence)
 	return &result, nil
 }
 
@@ -206,16 +204,24 @@ func runParallelSims(params *InputParameters) SimResult {
 	return avgResult
 }
 
-func estimateStatEquivalence(params *InputParameters) float64 {
+type StatEquivalenceResult struct {
+	CritApEquivalence    string
+	AgilityApEquivalence string
+}
+
+func EstimateStatEquivalence(params *InputParameters) (*StatEquivalenceResult, error) {
+	if params.NumberOfSims > 100000 {
+		return nil, fmt.Errorf("invalid number of simulations: %d (maximum allowed: 100000)", params.NumberOfSims)
+	}
+	// we check +10% crit instead of +1% crit, it was yielding more accurate results with less simulations
 	paramsPlusOneCrit := *params
-	paramsPlusOneCrit.Crit = params.Crit + 1.0
-	paramsPlusOneCrit.NumberOfSims = 10000
+	paramsPlusOneCrit.Crit = params.Crit + 10.0
 	critPlusOneResults := runParallelSims(&paramsPlusOneCrit)
 
 	critPlusOneDPS := critPlusOneResults.DPS
 
-	apEquivalenceMin := 20.0
-	apEquivalenceMax := 60.0
+	apEquivalenceMin := 200.0
+	apEquivalenceMax := 600.0
 	cursor := (apEquivalenceMax + apEquivalenceMin) / 2.0
 
 	diff := math.Inf(1)
@@ -224,22 +230,34 @@ func estimateStatEquivalence(params *InputParameters) float64 {
 	for i := 0; i < 20; i++ {
 		fmt.Printf("Iteration: %d, Cursor: %f, diff: %f\n", i+1, cursor, diff)
 		paramsPlusAp := *params
-		paramsPlusAp.NumberOfSims = 10000
 		paramsPlusAp.AP = params.AP + int(cursor)
 		apPlusResults := runParallelSims(&paramsPlusAp)
 		apPlusDPS := apPlusResults.DPS
-		fmt.Printf("paramsPlusAp: %v, apPlusDPS: %f, critPlusOneDPS: %f\n", paramsPlusAp.AP, apPlusDPS, critPlusOneDPS)
+		fmt.Printf("bonus: %f, apPlusDPS: %f, critPlusOneDPS: %f\n", cursor/10.0, apPlusDPS, critPlusOneDPS)
 		diff = math.Abs(apPlusDPS - critPlusOneDPS)
-		if diff < 0.2 {
+		if diff < 0.5 {
 			break
 		}
 		if apPlusDPS > critPlusOneDPS {
-			cursor = (cursor + apEquivalenceMin) / 2
+			apEquivalenceMax = cursor
 		} else {
-			cursor = (cursor + apEquivalenceMax) / 2
+			apEquivalenceMin = cursor
 		}
+		cursor = (apEquivalenceMax + apEquivalenceMin) / 2.0
 	}
-	return cursor
+
+	// divide by 10 to get 1% crit (instead of 10% crit)
+	cursor /= 10.0
+
+	apPerAgility := 2.2
+	critPerAgility := 1.0 / 53.0
+	agilityApEquivalence := apPerAgility + (critPerAgility * cursor)
+
+	result := &StatEquivalenceResult{
+		CritApEquivalence:    fmt.Sprintf("at this gear level, 1%% crit is approximately equal to %f AP", cursor),
+		AgilityApEquivalence: fmt.Sprintf("at this gear level, 1 agility is approximately equal to %f AP (with Blessing of Kings)", agilityApEquivalence),
+	}
+	return result, nil
 }
 
 func DebugValues(params *InputParameters) DebugResult {
