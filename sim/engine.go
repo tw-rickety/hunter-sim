@@ -2,19 +2,42 @@ package sim
 
 import (
 	"fmt"
+	"math"
 	"sync"
 )
 
-type ReportType []string
+const (
+	DEBUG = false
+)
+
+type InputParameters struct {
+	AP                     int
+	Crit                   float64
+	Hit                    int
+	ItemHaste              float64
+	QuiverHaste            float64
+	ArrowDPS               float64
+	Bow                    *Bow
+	Talents                *Talents
+	Race                   *Race
+	Ping                   float64
+	NumberOfSims           int
+	FightDurationInSeconds float64
+
+	// TODO - move to "special?"
+	MultishotCooldown float64
+}
 
 type SimResult struct {
+	DPS                 float64
+	DPSRangeMin         float64
+	DPSRangeMax         float64
 	TotalDamage         float64
 	AutoDamage          float64
 	MultishotDamage     float64
 	SteadyshotDamage    float64
 	EndlessQuiverDamage float64
 	PiercingShotsDamage float64
-	DPS                 float64
 	TotalClippingTime   float64
 	RapidFireUptime     float64
 	QuickshotsUptime    float64
@@ -31,17 +54,18 @@ type DebugResult struct {
 	MaxDamageSteadyshot float64
 }
 
-const (
-	DEBUG = false
-)
-
-func RunBasicSim() SimResult {
-	// return runParallelSims(1)
-	return runParallelSims(100000)
+func RunBasicSim(params *InputParameters) (*SimResult, error) {
+	if params.NumberOfSims > 100000 {
+		return nil, fmt.Errorf("invalid number of simulations: %d (maximum allowed: 100000)", params.NumberOfSims)
+	}
+	result := runParallelSims(params)
+	// equivalence := estimateStatEquivalence(params)
+	// fmt.Printf("Equivalence: %f\n", equivalence)
+	return &result, nil
 }
 
-func runSingleSim() SimResult {
-	hunter, clock, actionQueue := SetupSim()
+func runSingleSim(params *InputParameters) SimResult {
+	hunter, clock, actionQueue := SetupSim(params)
 	simResult := &SimResult{}
 
 	for !clock.IsDone() {
@@ -53,16 +77,46 @@ func runSingleSim() SimResult {
 	return *simResult
 }
 
-func runParallelSims(numSims int) SimResult {
+func SetupSim(params *InputParameters) (*Hunter, *Clock, *ActionQueue) {
+	hunter := &Hunter{
+		AP:                params.AP,
+		Crit:              params.Crit,
+		Hit:               params.Hit,
+		ItemHaste:         params.ItemHaste,
+		QuiverHaste:       params.QuiverHaste,
+		ArrowDPS:          params.ArrowDPS,
+		Bow:               params.Bow,
+		Talents:           params.Talents,
+		Race:              params.Race,
+		Ping:              params.Ping,
+		MultishotCooldown: params.MultishotCooldown,
+		BonusStats: &HunterBonusStats{
+			TrinketAP:       0,
+			BonusCrit:       0,
+			RapidFireHaste:  HasteBuff{RemainingTime: 0, Haste: 1.4},
+			QuickshotsHaste: HasteBuff{RemainingTime: 0, Haste: 1.15},
+		},
+	}
+	clock := &Clock{
+		Time:     0,
+		EndTime:  params.FightDurationInSeconds,
+		TickSize: 0.01,
+		Timers:   &Timers{},
+	}
+	actionQueue := &ActionQueue{}
+	return hunter, clock, actionQueue
+}
+
+func runParallelSims(params *InputParameters) SimResult {
 	var wg sync.WaitGroup
-	results := make(chan SimResult, numSims)
+	results := make(chan SimResult, params.NumberOfSims)
 
 	// Launch goroutines for each simulation
-	for i := 0; i < numSims; i++ {
+	for i := 0; i < params.NumberOfSims; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results <- runSingleSim()
+			results <- runSingleSim(params)
 		}()
 	}
 
@@ -74,6 +128,8 @@ func runParallelSims(numSims int) SimResult {
 
 	// Collect and average results
 	var totalDamage, autoDamage, multishotDamage, steadyshotDamage, endlessQuiverDamage, piercingShotsDamage, dps, clippingTime, rapidFireUptime, quickshotsUptime float64
+	var dpsValues []float64 // Add slice to store individual DPS values
+	var minDPS, maxDPS float64
 	count := 0
 
 	for result := range results {
@@ -84,6 +140,21 @@ func runParallelSims(numSims int) SimResult {
 		endlessQuiverDamage += result.EndlessQuiverDamage
 		piercingShotsDamage += result.PiercingShotsDamage
 		dps += result.DPS
+		dpsValues = append(dpsValues, result.DPS) // Store each DPS value
+
+		// Track min and max DPS
+		if count == 0 {
+			minDPS = result.DPS
+			maxDPS = result.DPS
+		} else {
+			if result.DPS < minDPS {
+				minDPS = result.DPS
+			}
+			if result.DPS > maxDPS {
+				maxDPS = result.DPS
+			}
+		}
+
 		clippingTime += result.TotalClippingTime
 		rapidFireUptime += result.RapidFireUptime
 		quickshotsUptime += result.QuickshotsUptime
@@ -91,14 +162,26 @@ func runParallelSims(numSims int) SimResult {
 	}
 
 	// Calculate averages
+	avgDPS := dps / float64(count)
+
+	// Calculate standard deviation
+	var sumSquaredDiff float64
+	for _, value := range dpsValues {
+		diff := value - avgDPS
+		sumSquaredDiff += diff * diff
+	}
+	stdDev := math.Sqrt(sumSquaredDiff / float64(count))
+
 	avgResult := SimResult{
+		DPS:                 avgDPS,
+		DPSRangeMin:         minDPS,
+		DPSRangeMax:         maxDPS,
 		TotalDamage:         totalDamage / float64(count),
 		AutoDamage:          autoDamage / float64(count),
 		MultishotDamage:     multishotDamage / float64(count),
 		SteadyshotDamage:    steadyshotDamage / float64(count),
 		EndlessQuiverDamage: endlessQuiverDamage / float64(count),
 		PiercingShotsDamage: piercingShotsDamage / float64(count),
-		DPS:                 dps / float64(count),
 		TotalClippingTime:   clippingTime / float64(count),
 		RapidFireUptime:     rapidFireUptime / float64(count),
 		QuickshotsUptime:    quickshotsUptime / float64(count),
@@ -112,63 +195,55 @@ func runParallelSims(numSims int) SimResult {
 		fmt.Sprintf("Average Steadyshot Damage: %f (%.2f%%)", avgResult.SteadyshotDamage, avgResult.SteadyshotDamage/avgResult.TotalDamage*100),
 		fmt.Sprintf("Average Endless Quiver Damage: %f (%.2f%%)", avgResult.EndlessQuiverDamage, avgResult.EndlessQuiverDamage/avgResult.TotalDamage*100),
 		fmt.Sprintf("Average Piercing Shots Damage: %f (%.2f%%)", avgResult.PiercingShotsDamage, avgResult.PiercingShotsDamage/avgResult.TotalDamage*100),
-		fmt.Sprintf("Average DPS: %f", avgResult.DPS),
+		fmt.Sprintf("Average DPS: %f (±%.2f) [%.2f - %.2f]", avgResult.DPS, stdDev, minDPS, maxDPS),
 		fmt.Sprintf("Average Total Clipping Time: %fs", avgResult.TotalClippingTime),
-		// TODO - stop hardcoding 60s
-		fmt.Sprintf("Average Total Clipping Percentage: (%.2f%%)", avgResult.TotalClippingTime/60*100),
-		fmt.Sprintf("Average Rapid Fire Uptime: %fs (%.2f%%)", avgResult.RapidFireUptime, avgResult.RapidFireUptime/60*100),
-		fmt.Sprintf("Average Quickshots Uptime: %fs (%.2f%%)", avgResult.QuickshotsUptime, avgResult.QuickshotsUptime/60*100),
+		fmt.Sprintf("Average Total Clipping Percentage: (%.2f%%)", avgResult.TotalClippingTime/params.FightDurationInSeconds*100),
+		fmt.Sprintf("Average Rapid Fire Uptime: %fs (%.2f%%)", avgResult.RapidFireUptime, avgResult.RapidFireUptime/params.FightDurationInSeconds*100),
+		fmt.Sprintf("Average Quickshots Uptime: %fs (%.2f%%)", avgResult.QuickshotsUptime, avgResult.QuickshotsUptime/params.FightDurationInSeconds*100),
 		fmt.Sprintf("Number of Simulations: %d", count),
 	}
 
 	return avgResult
 }
 
-func SetupSim() (*Hunter, *Clock, *ActionQueue) {
-	talents := &Talents{
-		RangedWeaponSpec:   1.05,
-		SwiftReflexesHaste: 1.02,
+func estimateStatEquivalence(params *InputParameters) float64 {
+	paramsPlusOneCrit := *params
+	paramsPlusOneCrit.Crit = params.Crit + 1.0
+	paramsPlusOneCrit.NumberOfSims = 10000
+	critPlusOneResults := runParallelSims(&paramsPlusOneCrit)
+
+	critPlusOneDPS := critPlusOneResults.DPS
+
+	apEquivalenceMin := 20.0
+	apEquivalenceMax := 60.0
+	cursor := (apEquivalenceMax + apEquivalenceMin) / 2.0
+
+	diff := math.Inf(1)
+
+	// run a max of 20 binary searches, in case something goes wrong to avoid an infinite loop
+	for i := 0; i < 20; i++ {
+		fmt.Printf("Iteration: %d, Cursor: %f, diff: %f\n", i+1, cursor, diff)
+		paramsPlusAp := *params
+		paramsPlusAp.NumberOfSims = 10000
+		paramsPlusAp.AP = params.AP + int(cursor)
+		apPlusResults := runParallelSims(&paramsPlusAp)
+		apPlusDPS := apPlusResults.DPS
+		fmt.Printf("paramsPlusAp: %v, apPlusDPS: %f, critPlusOneDPS: %f\n", paramsPlusAp.AP, apPlusDPS, critPlusOneDPS)
+		diff = math.Abs(apPlusDPS - critPlusOneDPS)
+		if diff < 0.2 {
+			break
+		}
+		if apPlusDPS > critPlusOneDPS {
+			cursor = (cursor + apEquivalenceMin) / 2
+		} else {
+			cursor = (cursor + apEquivalenceMax) / 2
+		}
 	}
-	race := &Race{
-		Haste: 1.01,
-	}
-	bonusStats := &HunterBonusStats{
-		TrinketAP:       0,
-		BonusCrit:       0,
-		RapidFireHaste:  HasteBuff{RemainingTime: 0, Haste: 1.4},
-		QuickshotsHaste: HasteBuff{RemainingTime: 0, Haste: 1.15},
-	}
-	bow := &Bow{
-		MinDamage:   144,
-		MaxDamage:   255,
-		ScopeDamage: 7,
-		Speed:       3.1,
-	}
-	hunter := &Hunter{
-		AP:          1751,
-		Crit:        31.48,
-		Hit:         7,
-		ItemHaste:   1.0,
-		QuiverHaste: 1.15,
-		ArrowDPS:    20,
-		Bow:         bow,
-		Talents:     talents,
-		Race:        race,
-		BonusStats:  bonusStats,
-		Ping:        150,
-	}
-	clock := &Clock{
-		Time:     0,
-		EndTime:  60,
-		TickSize: 0.01,
-		Timers:   &Timers{},
-	}
-	actionQueue := &ActionQueue{}
-	return hunter, clock, actionQueue
+	return cursor
 }
 
-func DebugValues() DebugResult {
-	hunter, clock, actionQueue := SetupSim()
+func DebugValues(params *InputParameters) DebugResult {
+	hunter, clock, actionQueue := SetupSim(params)
 	simResult := &SimResult{}
 	clock.Tick(actionQueue, hunter, simResult)
 	_, minDamageAuto, maxDamageAuto := hunter.GetAutoshotDamage(false)

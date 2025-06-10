@@ -28,20 +28,21 @@ func TestGetAutoshotDamage(t *testing.T) {
 		Speed:       3.1,
 	}
 	hunter := &Hunter{
-		AP:          1751,
-		Crit:        31.48,
-		Hit:         7,
-		ItemHaste:   1.0,
-		QuiverHaste: 1.15,
-		ArrowDPS:    20,
-		Bow:         bow,
-		Talents:     talents,
-		Race:        race,
-		BonusStats:  bonusStats,
-		Ping:        150,
+		AP:                1751,
+		Crit:              31.48,
+		Hit:               7,
+		ItemHaste:         1.0,
+		QuiverHaste:       1.15,
+		ArrowDPS:          20,
+		Bow:               bow,
+		Talents:           talents,
+		Race:              race,
+		BonusStats:        bonusStats,
+		Ping:              150,
+		MultishotCooldown: 9,
 	}
 
-	_, minDamage, maxDamage := hunter.GetAutoshotDamage(false)
+	damage, minDamage, maxDamage := hunter.GetAutoshotDamage(false)
 
 	expectedMinDamage := 630
 	expectedMaxDamage := 748
@@ -52,5 +53,9 @@ func TestGetAutoshotDamage(t *testing.T) {
 
 	if maxDamage != expectedMaxDamage {
 		t.Errorf("Expected max damage to be %v, got %v", expectedMaxDamage, maxDamage)
+	}
+
+	if damage < expectedMinDamage || damage > expectedMaxDamage {
+		t.Errorf("Expected random damage to be between %v and %v, got %v", expectedMinDamage, expectedMaxDamage, damage)
 	}
 }

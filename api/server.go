@@ -9,11 +9,37 @@ import (
 
 func StartServer() {
 	http.HandleFunc("/simulate", func(w http.ResponseWriter, r *http.Request) {
-		result := sim.RunBasicSim()
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var params sim.InputParameters
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		result, err := sim.RunBasicSim(&params)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		json.NewEncoder(w).Encode(result)
 	})
 	http.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
-		result := sim.DebugValues()
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var params sim.InputParameters
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		result := sim.DebugValues(&params)
 		json.NewEncoder(w).Encode(result)
 	})
 

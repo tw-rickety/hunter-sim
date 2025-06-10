@@ -16,13 +16,13 @@ const (
 	GCD                        = 1.5
 	CRIT_MULTIPLIER            = 2.3
 	QUICKSHOTS_DURATION        = 12
+
 	PIERCING_SHOTS_DURATION    = 8
 	PIERCING_SHOTS_MULTIPLIER  = 0.3
 	PIERCING_SHOTS_TICKS_EVERY = 2
 
 	// TODO - adjust these based on config
 	RAPID_FIRE_DURATION = 19
-	MULTISHOT_COOLDOWN  = 9
 	RAPID_FIRE_COOLDOWN = 5 * SECONDS_PER_MINUTE
 )
 
@@ -65,18 +65,22 @@ type DoT struct {
 // from items, 15% from quiver, and 1% from NE racial, the total haste is 1.05 * 1.15 * 1.01 = 1.21825.
 // for that reason, we have to store different haste values separately.
 type Hunter struct {
-	AP               int
-	Crit             float64
-	Hit              int
-	ItemHaste        float64
-	QuiverHaste      float64
-	ArrowDPS         float64
-	Bow              *Bow
-	Talents          *Talents
-	Race             *Race
-	BonusStats       *HunterBonusStats
-	Ping             float64
-	Rotation         string
+	AP                int
+	Crit              float64
+	Hit               int
+	ItemHaste         float64
+	QuiverHaste       float64
+	ArrowDPS          float64
+	Bow               *Bow
+	Talents           *Talents
+	Race              *Race
+	BonusStats        *HunterBonusStats
+	Ping              float64
+	Rotation          string
+	MultishotCooldown float64
+
+	StandardizedDamage bool
+
 	PiercingShotsDoT DoT
 
 	// todo - cooldowns array or struct
@@ -118,7 +122,12 @@ func (h *Hunter) GetAutoshotDamage(didCrit bool) (int, int, int) {
 	minDamage := (float64(h.Bow.MinDamage) + totalDamageBonus) * h.Talents.RangedWeaponSpec
 	maxDamage := (float64(h.Bow.MaxDamage) + totalDamageBonus) * h.Talents.RangedWeaponSpec
 
-	randomizedDamage := minDamage + rand.Float64()*(maxDamage-minDamage)
+	var randomizedDamage float64
+	if h.StandardizedDamage {
+		randomizedDamage = (maxDamage + minDamage) / 2
+	} else {
+		randomizedDamage = minDamage + rand.Float64()*(maxDamage-minDamage)
+	}
 
 	if didCrit {
 		randomizedDamage *= CRIT_MULTIPLIER
@@ -127,7 +136,6 @@ func (h *Hunter) GetAutoshotDamage(didCrit bool) (int, int, int) {
 	return int(math.Round(randomizedDamage)), int(math.Floor(minDamage)), int(math.Ceil(maxDamage))
 }
 
-// TODO - verify formulas here
 // GetMultishotDamage returns the randomized, minimum, and maximum, and randomized damage for a multishot.
 func (h *Hunter) GetMultishotDamage(didCrit bool) (int, int, int) {
 	damageBonusArrows := float64(h.Bow.Speed * h.ArrowDPS)
@@ -135,6 +143,7 @@ func (h *Hunter) GetMultishotDamage(didCrit bool) (int, int, int) {
 	damageBonusAP := float64(h.GetTotalAP()) / 14.0 * NORMALIZED_SPEED
 	damageBonusSkill := float64(172.5)
 
+	// TODO - move to config/hunter
 	barrageMultiplier := 1.15
 
 	totalDamageBonus := damageBonusArrows + damageBonusScope + damageBonusAP + damageBonusSkill
@@ -143,7 +152,12 @@ func (h *Hunter) GetMultishotDamage(didCrit bool) (int, int, int) {
 	minDamage := (float64(h.Bow.MinDamage) + totalDamageBonus) * barrageMultiplier
 	maxDamage := (float64(h.Bow.MaxDamage) + totalDamageBonus) * barrageMultiplier
 
-	randomizedDamage := minDamage + rand.Float64()*(maxDamage-minDamage)
+	var randomizedDamage float64
+	if h.StandardizedDamage {
+		randomizedDamage = (maxDamage + minDamage) / 2
+	} else {
+		randomizedDamage = minDamage + rand.Float64()*(maxDamage-minDamage)
+	}
 
 	if didCrit {
 		randomizedDamage *= CRIT_MULTIPLIER
@@ -152,7 +166,6 @@ func (h *Hunter) GetMultishotDamage(didCrit bool) (int, int, int) {
 	return int(math.Round(randomizedDamage)), int(math.Floor(minDamage)), int(math.Ceil(maxDamage))
 }
 
-// TODO - verify formulas here
 // GetSteadyshotDamage returns the randomized, minimum, and maximum, and randomized damage for a steadyshot.
 func (h *Hunter) GetSteadyshotDamage(didCrit bool) (int, int, int) {
 	damageBonusArrows := float64(h.Bow.Speed * h.ArrowDPS)
@@ -160,15 +173,21 @@ func (h *Hunter) GetSteadyshotDamage(didCrit bool) (int, int, int) {
 	damageBonusAP := float64(h.GetTotalAP()) / 14.0 * NORMALIZED_SPEED
 	damageBonusSkill := float64(50)
 
+	// TODO - move to config/hunter
 	improvedSteadyshotMultiplier := 1.15
 
 	totalDamageBonus := damageBonusArrows + damageBonusScope + damageBonusAP + damageBonusSkill
 
-	// note - according to target dummy logs, RWS does apply to steadyshot on turtleWoW.
+	// note - according to checking many target dummy logs, RWS does seem apply to steadyshot on turtleWoW.
 	minDamage := (float64(h.Bow.MinDamage) + totalDamageBonus) * improvedSteadyshotMultiplier * h.Talents.RangedWeaponSpec
 	maxDamage := (float64(h.Bow.MaxDamage) + totalDamageBonus) * improvedSteadyshotMultiplier * h.Talents.RangedWeaponSpec
 
-	randomizedDamage := minDamage + rand.Float64()*(maxDamage-minDamage)
+	var randomizedDamage float64
+	if h.StandardizedDamage {
+		randomizedDamage = (maxDamage + minDamage) / 2
+	} else {
+		randomizedDamage = minDamage + rand.Float64()*(maxDamage-minDamage)
+	}
 
 	if didCrit {
 		randomizedDamage *= CRIT_MULTIPLIER
@@ -187,7 +206,7 @@ func (h *Hunter) GetMultishotCastTime() float64 {
 }
 
 func (h *Hunter) GetMultishotCooldown() float64 {
-	return MULTISHOT_COOLDOWN
+	return h.MultishotCooldown
 }
 
 func (h *Hunter) GetReloadingTime() float64 {
