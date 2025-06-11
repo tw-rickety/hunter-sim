@@ -27,39 +27,14 @@ then open the WSL terminal and follow the steps below
     go version
     ```
 
-
 * Run the simulator in a terminal window (make sure to `cd` into the `hunter-sim` folder first):
   ```bash
   make run
   ```
-* Open a new terminal window (WSL terminal if you're on Windows) and run the sample request in [example_curl.txt](example_curl.txt). Modify values to whatever you want (I took these from my in-game character panel)
-    ```
-    curl -X POST http://localhost:8080/simulate   -H "Content-Type: application/json"   -d '{
-        "AP": 1751,
-        "Crit": 31.48,
-        "Hit": 7,
-        "ItemHaste": 1.0,
-        "QuiverHaste": 1.15,
-        "ArrowDPS": 20,
-        "Bow": {
-        "MinDamage": 144,
-        "MaxDamage": 255,
-        "ScopeDamage": 7,
-        "Speed": 3.1
-        },
-    "Talents": {
-        "RangedWeaponSpec": 1.05,
-        "SwiftReflexesHaste": 1.02
-        },
-        "Race": {
-        "Haste": 1.01
-        },
-        "MultishotCooldown": 9,
-        "Ping": 150,
-        "NumberOfSims": 10000,
-        "FightDurationInSeconds": 60
-    }' | json_pp
-    ```
+
+* Open your web browser and go to `http://localhost:8080`
+* Fill in your hunter's stats in the form and click "Run Simulation"
+* The results will be displayed below the form
 
 
 
@@ -85,4 +60,5 @@ To check accuracy, three things were done:
 * implement trinket swapping logic and passing in specials such as trinkets
 * implement armor (currently, armor/mob level is not taken into account)
 * implement pet DPS simulation
+* allow passing in different rotations (i.e. [auto - steady - multi - auto], [auto - multi - auto - steady], or a mix of the two if rapidfire/quickshots is active)
 

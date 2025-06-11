@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hunter DPS Simulator</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; font-size: 1.1em; }
+        .form-group { margin-bottom: 8px; }
+        .form-section { margin-bottom: 15px; }
+        .form-section h3 { margin: 0 0 8px 0; color: #333; }
+        .indented { margin-left: 20px; }
+        label { display: block; margin-bottom: 2px; font-size: 1.1em; }
+        input { width: 100%; padding: 4px; margin-bottom: 4px; box-sizing: border-box; font-size: 1.1em; }
+        button { padding: 16px 16px; background: #4CAF50; color: black; border: none; cursor: pointer; margin-top: 10px; font-size: 1.1em; }
+        .button-secondary { background: #6ec56d47; }
+        #results-labels { margin-top: 20px; white-space: pre-wrap; font-size: 1.1em; }
+        #results-values { margin-top: 20px; white-space: pre-wrap; font-size: 1.1em; }
+        .form-container { display: flex; gap: 20px; }
+        .results-container { display: flex; gap: 20px; justify-content: space-between; }
+        .form-column { flex: 1; }
+        .full-width { width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>Hunter DPS Simulator</h1>
+    <form id="simForm">
+        <div class="form-container">
+            <div class="form-column">
+                <div class="form-section">
+                    <h3>Basic Stats</h3>
+                    <div class="form-group">
+                        <label>Attack Power:</label>
+                        <input type="number" name="AP" value="1751" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Crit %:</label>
+                        <input type="number" step="0.01" name="Crit" value="31.48" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Hit %:</label>
+                        <input type="number" name="Hit" value="7" required>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Haste</h3>
+                    <div class="form-group">
+                        <label>Item Haste:</label>
+                        <input type="number" step="0.01" name="ItemHaste" value="1.0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Quiver Haste:</label>
+                        <input type="number" step="0.01" name="QuiverHaste" value="1.15" required>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Bow</h3>
+                    <div class="form-group indented">
+                        <label>Min Damage:</label>
+                        <input type="number" name="Bow.MinDamage" value="144" required>
+                    </div>
+                    <div class="form-group indented">
+                        <label>Max Damage:</label>
+                        <input type="number" name="Bow.MaxDamage" value="255" required>
+                    </div>
+                    <div class="form-group indented">
+                        <label>Scope Damage:</label>
+                        <input type="number" name="Bow.ScopeDamage" value="7" required>
+                    </div>
+                    <div class="form-group indented">
+                        <label>Speed:</label>
+                        <input type="number" step="0.01" name="Bow.Speed" value="3.1" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-column">
+                <div class="form-section">
+                    <h3>Talents</h3>
+                    <div class="form-group indented">
+                        <label>Ranged Weapon Spec:</label>
+                        <input type="number" step="0.01" name="Talents.RangedWeaponSpec" value="1.05" required>
+                    </div>
+                    <div class="form-group indented">
+                        <label>Swift Reflexes Haste:</label>
+                        <input type="number" step="0.01" name="Talents.SwiftReflexesHaste" value="1.02" required>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Race</h3>
+                    <div class="form-group indented">
+                        <label>Haste:</label>
+                        <input type="number" step="0.01" name="Race.Haste" value="1.01" required>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Simulation Settings</h3>
+                    <div class="form-group">
+                        <label>Arrow DPS:</label>
+                        <input type="number" step="0.01" name="ArrowDPS" value="20" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Multishot Cooldown:</label>
+                        <input type="number" step="0.01" name="MultishotCooldown" value="9" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Ping (ms):</label>
+                        <input type="number" name="Ping" value="150" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Number of Parallel Simulations:</label>
+                        <input type="number" name="NumberOfSims" value="10000" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Fight Duration (seconds):</label>
+                        <input type="number" name="FightDurationInSeconds" value="60" required>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: row; gap: 10px;">
+            <button type="submit" class="full-width button-primary">Run DPS Simulations</button>
+            <button type="submit-equivalence" class="full-width button-secondary">Estimate AP/AGI/CRIT equivalence (WIP, recommend using 50,000 simulations, takes several seconds to run)</button>
+            <button type="submit-combatlog" class="full-width button-secondary">[debug] See combat log for 1 simulation</button>
+        </div>
+    </form>
+    <div class="results-container">
+        <div>
+            <div id="results-labels"></div>
+        </div>
+        <div class="form-column">
+            <div id="results-values"></div>
+        </div>
+    </div>
+    <div id="equivalence-results-container">
+
+    <script>
+        // Helper function to collect form data
+        function collectFormData() {
+            const form = document.getElementById('simForm');
+            const formData = new FormData(form);
+            
+            return {
+                AP: parseInt(formData.get('AP')),
+                Crit: parseFloat(formData.get('Crit')),
+                Hit: parseInt(formData.get('Hit')),
+                ItemHaste: parseFloat(formData.get('ItemHaste')),
+                QuiverHaste: parseFloat(formData.get('QuiverHaste')),
+                ArrowDPS: parseFloat(formData.get('ArrowDPS')),
+                Bow: {
+                    MinDamage: parseInt(formData.get('Bow.MinDamage')),
+                    MaxDamage: parseInt(formData.get('Bow.MaxDamage')),
+                    ScopeDamage: parseInt(formData.get('Bow.ScopeDamage')),
+                    Speed: parseFloat(formData.get('Bow.Speed'))
+                },
+                Talents: {
+                    RangedWeaponSpec: parseFloat(formData.get('Talents.RangedWeaponSpec')),
+                    SwiftReflexesHaste: parseFloat(formData.get('Talents.SwiftReflexesHaste'))
+                },
+                Race: {
+                    Haste: parseFloat(formData.get('Race.Haste'))
+                },
+                MultishotCooldown: parseFloat(formData.get('MultishotCooldown')),
+                Ping: parseInt(formData.get('Ping')),
+                NumberOfSims: parseInt(formData.get('NumberOfSims')),
+                FightDurationInSeconds: parseInt(formData.get('FightDurationInSeconds'))
+            };
+        }
+
+        // Helper function to clear results
+        function clearResults() {
+            document.getElementById('results-labels').innerHTML = '';
+            document.getElementById('results-values').innerHTML = '';
+            document.getElementById('equivalence-results-container').innerHTML = '';
+        }
+
+        // Helper function to display results
+        function displayResults(result) {
+            result.Report.forEach(line => {
+                const [label, ...value] = line.split(': ');
+                const resultsDiv = document.getElementById('results-labels');
+                resultsDiv.innerHTML += label + '<br>';
+                const resultsValuesDiv = document.getElementById('results-values');
+                resultsValuesDiv.innerHTML += value.join(': ') + '<br>';
+            });
+        }
+
+        // Helper function to display results
+        function displayEquivalenceResults(result) {
+            const resultsDiv = document.getElementById('equivalence-results-container');
+            resultsDiv.innerHTML += result.AgilityApEquivalence + '<br>';
+            resultsDiv.innerHTML += result.CritApEquivalence + '<br>';
+        }
+
+        // Helper function to handle API calls
+        async function callApi(endpoint, data, errorMessage) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('results-labels').innerHTML = errorMessage + ': ' + error.message;
+            }
+        }
+
+        // Main simulation handler
+        document.getElementById('simForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearResults();
+            const data = collectFormData();
+            const result = await callApi('/simulate', data, 'Error running simulation');
+            displayResults(result);
+        });
+
+        // Equivalence handler
+        document.querySelector('button[type="submit-equivalence"]').addEventListener('click', async (e) => {
+            e.preventDefault();
+            clearResults();
+            const data = collectFormData();
+            const result = await callApi('/estimate-stat-equivalence', data, 'Error calculating equivalence');
+            displayEquivalenceResults(result);
+        });
+
+        // Combat log handler
+        document.querySelector('button[type="submit-combatlog"]').addEventListener('click', async (e) => {
+            e.preventDefault();
+            clearResults();
+            const data = collectFormData();
+            data.NumberOfSims = 1; // Force to 1 for combat log
+            const result = await callApi('/debug-combat-log', data, 'Error generating combat log');
+            displayResults(result);
+        });
+    </script>
+</body>
+</html> 

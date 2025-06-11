@@ -81,6 +81,8 @@ type Hunter struct {
 
 	StandardizedDamage bool
 
+	DebugCombatLog bool
+
 	PiercingShotsDoT DoT
 
 	// todo - cooldowns array or struct
@@ -216,18 +218,18 @@ func (h *Hunter) GetReloadingTime() float64 {
 func (h *Hunter) RollQuickshotsProc(c *Clock, r *SimResult) {
 	if rand.Float64() < 0.10 {
 		h.BonusStats.QuickshotsHaste.RemainingTime = QUICKSHOTS_DURATION
-		if DEBUG {
-			fmt.Printf("%f - Quickshots procced!\n", c.Time)
+		if h.DebugCombatLog {
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: Quickshots procced!", c.Time))
 		}
 	}
 }
 
-func (h *Hunter) PopRapidFireIfReady(c *Clock) {
+func (h *Hunter) PopRapidFireIfReady(c *Clock, r *SimResult) {
 	if c.Timers.RapidFireCooldown <= 0 {
 		h.BonusStats.RapidFireHaste.RemainingTime = RAPID_FIRE_DURATION
 		c.Timers.RapidFireCooldown = RAPID_FIRE_COOLDOWN
-		if DEBUG {
-			fmt.Printf("%f - Rapid fire popped!\n", c.Time)
+		if h.DebugCombatLog {
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: Rapid fire popped!", c.Time))
 		}
 	}
 }

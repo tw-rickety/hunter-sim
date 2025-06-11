@@ -23,6 +23,7 @@ type InputParameters struct {
 	Ping                   float64
 	NumberOfSims           int
 	FightDurationInSeconds float64
+	// todo - quickshots haste
 
 	// TODO - move to "special?"
 	MultishotCooldown float64
@@ -63,8 +64,8 @@ func RunBasicSim(params *InputParameters) (*SimResult, error) {
 	return &result, nil
 }
 
-func runSingleSim(params *InputParameters) SimResult {
-	hunter, clock, actionQueue := SetupSim(params)
+func runSingleSim(params *InputParameters, debugCombatLog bool) SimResult {
+	hunter, clock, actionQueue := SetupSim(params, debugCombatLog)
 	simResult := &SimResult{}
 
 	for !clock.IsDone() {
@@ -76,7 +77,7 @@ func runSingleSim(params *InputParameters) SimResult {
 	return *simResult
 }
 
-func SetupSim(params *InputParameters) (*Hunter, *Clock, *ActionQueue) {
+func SetupSim(params *InputParameters, debugCombatLog bool) (*Hunter, *Clock, *ActionQueue) {
 	hunter := &Hunter{
 		AP:                params.AP,
 		Crit:              params.Crit,
@@ -95,6 +96,7 @@ func SetupSim(params *InputParameters) (*Hunter, *Clock, *ActionQueue) {
 			RapidFireHaste:  HasteBuff{RemainingTime: 0, Haste: 1.4},
 			QuickshotsHaste: HasteBuff{RemainingTime: 0, Haste: 1.15},
 		},
+		DebugCombatLog: debugCombatLog,
 	}
 	clock := &Clock{
 		Time:     0,
@@ -115,7 +117,7 @@ func runParallelSims(params *InputParameters) SimResult {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results <- runSingleSim(params)
+			results <- runSingleSim(params, false)
 		}()
 	}
 
@@ -188,16 +190,16 @@ func runParallelSims(params *InputParameters) SimResult {
 
 	// Generate report
 	avgResult.Report = []string{
-		fmt.Sprintf("Average Total Damage: %f", avgResult.TotalDamage),
-		fmt.Sprintf("Average Auto Damage: %f (%.2f%%)", avgResult.AutoDamage, avgResult.AutoDamage/avgResult.TotalDamage*100),
-		fmt.Sprintf("Average Multishot Damage: %f (%.2f%%)", avgResult.MultishotDamage, avgResult.MultishotDamage/avgResult.TotalDamage*100),
-		fmt.Sprintf("Average Steadyshot Damage: %f (%.2f%%)", avgResult.SteadyshotDamage, avgResult.SteadyshotDamage/avgResult.TotalDamage*100),
-		fmt.Sprintf("Average Endless Quiver Damage: %f (%.2f%%)", avgResult.EndlessQuiverDamage, avgResult.EndlessQuiverDamage/avgResult.TotalDamage*100),
-		fmt.Sprintf("Average Piercing Shots Damage: %f (%.2f%%)", avgResult.PiercingShotsDamage, avgResult.PiercingShotsDamage/avgResult.TotalDamage*100),
-		fmt.Sprintf("Average DPS: %f (±%.2f) [%.2f - %.2f]", avgResult.DPS, stdDev, minDPS, maxDPS),
-		fmt.Sprintf("Average Total Clipping Time: %fs (%.2f%%)", avgResult.TotalClippingTime, avgResult.TotalClippingTime/params.FightDurationInSeconds*100),
-		fmt.Sprintf("Average Rapid Fire Uptime: %fs (%.2f%%)", avgResult.RapidFireUptime, avgResult.RapidFireUptime/params.FightDurationInSeconds*100),
-		fmt.Sprintf("Average Quickshots Uptime: %fs (%.2f%%)", avgResult.QuickshotsUptime, avgResult.QuickshotsUptime/params.FightDurationInSeconds*100),
+		fmt.Sprintf("Average DPS: %.2f    sd:(±%.2f) range:[%.2f - %.2f]", avgResult.DPS, stdDev, minDPS, maxDPS),
+		fmt.Sprintf("Average Total Damage: %.2f", avgResult.TotalDamage),
+		fmt.Sprintf("Average Auto Damage: %.2f (%.2f%%)", avgResult.AutoDamage, avgResult.AutoDamage/avgResult.TotalDamage*100),
+		fmt.Sprintf("Average Multishot Damage: %.2f (%.2f%%)", avgResult.MultishotDamage, avgResult.MultishotDamage/avgResult.TotalDamage*100),
+		fmt.Sprintf("Average Steadyshot Damage: %.2f (%.2f%%)", avgResult.SteadyshotDamage, avgResult.SteadyshotDamage/avgResult.TotalDamage*100),
+		fmt.Sprintf("Average Endless Quiver Damage: %.2f (%.2f%%)", avgResult.EndlessQuiverDamage, avgResult.EndlessQuiverDamage/avgResult.TotalDamage*100),
+		fmt.Sprintf("Average Piercing Shots Damage: %.2f (%.2f%%)", avgResult.PiercingShotsDamage, avgResult.PiercingShotsDamage/avgResult.TotalDamage*100),
+		fmt.Sprintf("Average Total Clipping Time: %.2fs (%.2f%%)", avgResult.TotalClippingTime, avgResult.TotalClippingTime/params.FightDurationInSeconds*100),
+		fmt.Sprintf("Average Rapid Fire Uptime: %.2fs (%.2f%%)", avgResult.RapidFireUptime, avgResult.RapidFireUptime/params.FightDurationInSeconds*100),
+		fmt.Sprintf("Average Quickshots Uptime: %.2fs (%.2f%%)", avgResult.QuickshotsUptime, avgResult.QuickshotsUptime/params.FightDurationInSeconds*100),
 		fmt.Sprintf("Number of Simulations: %d", count),
 	}
 
@@ -213,7 +215,7 @@ func EstimateStatEquivalence(params *InputParameters) (*StatEquivalenceResult, e
 	if params.NumberOfSims > 100000 {
 		return nil, fmt.Errorf("invalid number of simulations: %d (maximum allowed: 100000)", params.NumberOfSims)
 	}
-	// we check +10% crit instead of +1% crit, it was yielding much more accurate results with less simulations
+	// todo: go back to checking +10% crit instead of +1% crit, it was yielding much more accurate results with less simulations
 	paramsPlusOneCrit := *params
 	paramsPlusOneCrit.Crit = params.Crit + 1.0
 	critPlusOneResults := runParallelSims(&paramsPlusOneCrit)
@@ -225,8 +227,8 @@ func EstimateStatEquivalence(params *InputParameters) (*StatEquivalenceResult, e
 	cursor := (apEquivalenceMax + apEquivalenceMin) / 2.0
 	var diff float64
 
-	// run a max of 20 fake "binary searches", in case something goes wrong to avoid an infinite loop
-	for i := 0; i < 20; i++ {
+	// run a max of 12 fake "binary searches", in case something goes wrong to avoid an infinite loop
+	for i := 0; i < 12; i++ {
 		paramsPlusAp := *params
 		paramsPlusAp.AP = params.AP + int(cursor)
 		apPlusResults := runParallelSims(&paramsPlusAp)
@@ -251,14 +253,22 @@ func EstimateStatEquivalence(params *InputParameters) (*StatEquivalenceResult, e
 	agilityApEquivalence := apPerAgility + (critPerAgility * cursor)
 
 	result := &StatEquivalenceResult{
-		CritApEquivalence:    fmt.Sprintf("at this gear level, +1%% crit is approximately equal to +%f AP", cursor),
-		AgilityApEquivalence: fmt.Sprintf("at this gear level, +1 agility is approximately equal to +%f AP (with Blessing of Kings)", agilityApEquivalence),
+		CritApEquivalence:    fmt.Sprintf("at this gear level, +1%% crit is approximately equal to +%.2f AP", cursor),
+		AgilityApEquivalence: fmt.Sprintf("at this gear level, +1 agility is approximately equal to +%.2f AP (with Blessing of Kings)", agilityApEquivalence),
 	}
 	return result, nil
 }
 
+func DebugCombatLog(params *InputParameters) (*SimResult, error) {
+	fmt.Printf("DebugCombatLog\n")
+	params.NumberOfSims = 1
+	result := runSingleSim(params, true)
+	fmt.Printf("DebugCombatLog result: %v\n", result)
+	return &result, nil
+}
+
 func DebugValues(params *InputParameters) DebugResult {
-	hunter, _, _ := SetupSim(params)
+	hunter, _, _ := SetupSim(params, false)
 	_, minDamageAuto, maxDamageAuto := hunter.GetAutoshotDamage(false)
 	_, minDamageMultishot, maxDamageMultishot := hunter.GetMultishotDamage(false)
 	_, minDamageSteadyshot, maxDamageSteadyshot := hunter.GetSteadyshotDamage(false)

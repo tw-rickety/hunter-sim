@@ -7,12 +7,11 @@ import (
 )
 
 type ActionQueue struct {
-	lastShot    string
-	queuedSpell string
+	lastShot string
 }
 
 func (a *ActionQueue) Process(c *Clock, h *Hunter, r *SimResult) {
-	h.PopRapidFireIfReady(c)
+	h.PopRapidFireIfReady(c, r)
 
 	// // Initial multishot
 	// if c.IsFresh() {
@@ -119,26 +118,24 @@ func (a *ActionQueue) AutoshotDamageDealt(c *Clock, h *Hunter, r *SimResult, ext
 		r.AutoDamage += float64(damage)
 	}
 
-	if DEBUG {
+	if h.DebugCombatLog {
 		if extraShot {
 			if didCrit {
-				fmt.Printf("%f - endless quiver CRIT for %d damage.\n", c.Time, damage)
+				r.Report = append(r.Report, fmt.Sprintf("%.2fs: endless quiver CRIT for %d damage.", c.Time, damage))
 			} else {
-				fmt.Printf("%f - endless quiver hit for %d damage.\n", c.Time, damage)
+				r.Report = append(r.Report, fmt.Sprintf("%.2fs: endless quiver hit for %d damage.", c.Time, damage))
 			}
 			return
 		}
 
 		if didCrit {
-			fmt.Printf("%f - autoshot CRIT for %d damage.", c.Time, damage)
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: autoshot CRIT for %d damage.", c.Time, damage))
 		} else {
-			fmt.Printf("%f - autoshot hit for %d damage.", c.Time, damage)
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: autoshot hit for %d damage.", c.Time, damage))
 		}
 
 		if c.Timers.NextShotClippingTime > 0 {
-			fmt.Printf("Shot clipped by: %fms\n", c.Timers.NextShotClippingTime*1000)
-		} else {
-			fmt.Printf("\n")
+			r.Report[len(r.Report)-1] += fmt.Sprintf("Shot clipped by: %0.fms", c.Timers.NextShotClippingTime*1000)
 		}
 	}
 
@@ -169,11 +166,11 @@ func (a *ActionQueue) MultishotDamageDealt(c *Clock, h *Hunter, r *SimResult) {
 		h.PiercingShotsDoT.DamagePerTick = math.Round(float64(damage) * PIERCING_SHOTS_MULTIPLIER * PIERCING_SHOTS_TICKS_EVERY / PIERCING_SHOTS_DURATION)
 	}
 
-	if DEBUG {
+	if h.DebugCombatLog {
 		if didCrit {
-			fmt.Printf("%f - multishot CRIT for %d damage\n", c.Time, damage)
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: multishot CRIT for %d damage", c.Time, damage))
 		} else {
-			fmt.Printf("%f - multishot hit for %d damage\n", c.Time, damage)
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: multishot hit for %d damage", c.Time, damage))
 		}
 	}
 }
@@ -203,11 +200,11 @@ func (a *ActionQueue) SteadyshotDamageDealt(c *Clock, h *Hunter, r *SimResult) {
 		h.PiercingShotsDoT.TicksEvery = PIERCING_SHOTS_TICKS_EVERY
 	}
 
-	if DEBUG {
+	if h.DebugCombatLog {
 		if didCrit {
-			fmt.Printf("%f - steadyshot CRIT for %d damage\n", c.Time, damage)
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: steadyshot CRIT for %d damage", c.Time, damage))
 		} else {
-			fmt.Printf("%f - steadyshot hit for %d damage\n", c.Time, damage)
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: steadyshot hit for %d damage", c.Time, damage))
 		}
 	}
 }

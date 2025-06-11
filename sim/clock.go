@@ -72,14 +72,14 @@ func (c *Clock) decrementBuffs(h *Hunter, r *SimResult) {
 	h.BonusStats.QuickshotsHaste.RemainingTime = math.Max(h.BonusStats.QuickshotsHaste.RemainingTime-c.TickSize, 0)
 	h.BonusStats.RapidFireHaste.RemainingTime = math.Max(h.BonusStats.RapidFireHaste.RemainingTime-c.TickSize, 0)
 
-	if DEBUG {
+	if h.DebugCombatLog {
 		if wasQuickshotsHasteActive && h.BonusStats.QuickshotsHaste.RemainingTime <= 0 {
 			h.BonusStats.QuickshotsHaste.RemainingTime = 0
-			fmt.Printf("%f - Quickshots expired\n", c.Time)
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: Quickshots expired", c.Time))
 		}
 		if wasRapidFireHasteActive && h.BonusStats.RapidFireHaste.RemainingTime <= 0 {
 			h.BonusStats.RapidFireHaste.RemainingTime = 0
-			fmt.Printf("%f - Rapid fire expired\n", c.Time)
+			r.Report = append(r.Report, fmt.Sprintf("%.2fs: Rapid fire expired", c.Time))
 		}
 	}
 }
@@ -88,8 +88,8 @@ func (c *Clock) decrementDoTs(h *Hunter, r *SimResult) {
 	if h.PiercingShotsDoT.DurationLeft > 0 && h.PiercingShotsDoT.DurationLeft < PIERCING_SHOTS_DURATION {
 		if isDivisible(h.PiercingShotsDoT.DurationLeft, h.PiercingShotsDoT.TicksEvery) {
 			r.PiercingShotsDamage += h.PiercingShotsDoT.DamagePerTick
-			if DEBUG {
-				fmt.Printf("%f - Piercing shots DoT tick for %f damage\n", c.Time, h.PiercingShotsDoT.DamagePerTick)
+			if h.DebugCombatLog {
+				r.Report = append(r.Report, fmt.Sprintf("%.2fs: Piercing shots DoT tick for %0.f damage", c.Time, h.PiercingShotsDoT.DamagePerTick))
 			}
 		}
 	}
