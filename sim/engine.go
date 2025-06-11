@@ -27,6 +27,7 @@ type InputParameters struct {
 
 	// TODO - move to "special?"
 	MultishotCooldown float64
+	QuickshotsHaste   float64
 }
 
 type SimResult struct {
@@ -94,7 +95,7 @@ func SetupSim(params *InputParameters, debugCombatLog bool) (*Hunter, *Clock, *A
 			TrinketAP:       0,
 			BonusCrit:       0,
 			RapidFireHaste:  HasteBuff{RemainingTime: 0, Haste: 1.4},
-			QuickshotsHaste: HasteBuff{RemainingTime: 0, Haste: 1.15},
+			QuickshotsHaste: HasteBuff{RemainingTime: 0, Haste: params.QuickshotsHaste},
 		},
 		DebugCombatLog: debugCombatLog,
 	}

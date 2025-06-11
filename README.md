@@ -1,6 +1,9 @@
+<img src="./images/form.png" alt="preview" width="600">
 # (WIP) TurtleWoW Marksman Hunter DPS Simulator
 
 This is a basic API that accepts a hunter's stats (AP, Crit, etc) and returns simulated DPS output. 
+
+This is still very early in development and only has a basic form to input stats, later on you will be able to add your gear/talents/etc.
 
 ## How do I use it?
 This is not currently deployed, you have to run it locally to test.
@@ -57,8 +60,8 @@ To check accuracy, three things were done:
 
 ## TODO list:
 * build frontend to select gear, calculate base stats, send sim request to API, and display results
-* implement trinket swapping logic and passing in specials such as trinkets
-* implement armor (currently, armor/mob level is not taken into account)
-* implement pet DPS simulation
+* implement trinket swapping logic and allow passing in special inputs such as trinket rotation
+* implement optional armor setting (currently, armor/mob level is not taken into account)
 * allow passing in different rotations (i.e. [auto - steady - multi - auto], [auto - multi - auto - steady], or a mix of the two if rapidfire/quickshots is active)
-
+* A / B testing - i.e. pass in 2 sets of gear and see the difference in dps with one request
+* implement pet DPS simulation (maybe, kind of a pain for little benefit)

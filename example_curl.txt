@@ -20,6 +20,7 @@ curl -X POST http://localhost:8080/simulate   -H "Content-Type: application/json
       "Haste": 1.01
     },
     "MultishotCooldown": 9,
+    "QuickshotsHaste": 1.15,
     "Ping": 150,
     "NumberOfSims": 10000,
     "FightDurationInSeconds": 60
@@ -49,6 +50,7 @@ curl -X POST http://localhost:8080/estimate-stat-equivalence   -H "Content-Type:
       "Haste": 1.01
     },
     "MultishotCooldown": 9,
+    "QuickshotsHaste": 1.15,
     "Ping": 150,
     "NumberOfSims": 10000,
     "FightDurationInSeconds": 60

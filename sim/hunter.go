@@ -65,20 +65,19 @@ type DoT struct {
 // from items, 15% from quiver, and 1% from NE racial, the total haste is 1.05 * 1.15 * 1.01 = 1.21825.
 // for that reason, we have to store different haste values separately.
 type Hunter struct {
-	AP                int
-	Crit              float64
-	Hit               int
-	ItemHaste         float64
-	QuiverHaste       float64
-	ArrowDPS          float64
-	Bow               *Bow
-	Talents           *Talents
-	Race              *Race
-	BonusStats        *HunterBonusStats
-	Ping              float64
-	Rotation          string
-	MultishotCooldown float64
-
+	AP                 int
+	Crit               float64
+	Hit                int
+	ItemHaste          float64
+	QuiverHaste        float64
+	ArrowDPS           float64
+	Bow                *Bow
+	Talents            *Talents
+	Race               *Race
+	BonusStats         *HunterBonusStats
+	Ping               float64
+	Rotation           string
+	MultishotCooldown  float64
 	StandardizedDamage bool
 
 	DebugCombatLog bool
